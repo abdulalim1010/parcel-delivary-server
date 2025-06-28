@@ -8,7 +8,6 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ✅ Allow React frontend to access this server
 app.use(cors({
   origin: 'http://localhost:5173',
   methods: ['GET', 'POST'],
@@ -17,7 +16,6 @@ app.use(cors({
 
 app.use(express.json()); // JSON body parser
 
-// ✅ MongoDB connection URI
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster2.emeucb3.mongodb.net/?retryWrites=true&w=majority&appName=Cluster2`;
 
 const client = new MongoClient(uri, {
@@ -34,19 +32,20 @@ async function run() {
 
     const db = client.db('parcelDB');
     const parcelCollection = db.collection('parcels');
+    const userCollection=db.collection('users')
 
     // ✅ Root route
     app.get('/', (req, res) => {
       res.send('📦 Parcel Delivery Server is Running');
     });
 
-    // ✅ Get all parcels OR filtered by user email
+    // ✅ Get parcels with optional email filter
     app.get('/parcels', async (req, res) => {
       try {
         const userEmail = req.query.email;
-        const query = userEmail ? { created_by: userEmail } : {};
+        const query = userEmail ? { creator_email: userEmail } : {};
         const options = {
-          sort: { createdAt: -1 },
+          sort: { creation_date: -1 },
         };
         const parcels = await parcelCollection.find(query, options).toArray();
         res.send(parcels);
@@ -55,8 +54,42 @@ async function run() {
         res.status(500).send({ message: 'Failed to get parcels' });
       }
     });
+    app.post('/users', async (req, res) => {
+      const email = req.body.email;
+      const userExists = await userCollection.findOne({ email: email });
+    
+      if (userExists) {
+        return res.status(200).send({ message: 'User already exists', inserted: false });
+      }
+    
+      const user = req.body;
+      const result = await userCollection.insertOne(user);
+      return res.send({ inserted: true, id: result.insertedId });
+    });
+    
 
-    // ✅ Create a parcel
+// ✅ Check if user exists by email
+app.get('/users/:email', async (req, res) => {
+  const email = req.params.email;
+
+  try {
+    const user = await userCollection.findOne({ email: email });
+
+    if (user) {
+      res.send(user); // send user object if exists
+    } else {
+      res.status(404).send({ message: 'User not found' });
+    }
+  } catch (err) {
+    console.error('Error checking user:', err);
+    res.status(500).send({ message: 'Server error' });
+  }
+});
+
+
+
+    
+    // ✅ POST route to create a parcel
     app.post('/parcels', async (req, res) => {
       try {
         const parcelData = req.body;
@@ -66,7 +99,7 @@ async function run() {
           id: result.insertedId
         });
       } catch (error) {
-        console.error('❌ Insert error:', error);
+        console.error('❌ Error creating parcel:', error);
         res.status(500).json({
           error: 'Failed to create parcel',
           details: error.message
@@ -74,7 +107,6 @@ async function run() {
       }
     });
 
-    // ✅ Confirm MongoDB connection
     await client.db("admin").command({ ping: 1 });
     console.log("✅ Connected to MongoDB");
   } catch (error) {
@@ -84,7 +116,6 @@ async function run() {
 
 run().catch(console.dir);
 
-// ✅ Start server
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
