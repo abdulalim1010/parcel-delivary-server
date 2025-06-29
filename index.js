@@ -32,7 +32,9 @@ async function run() {
 
     const db = client.db('parcelDB');
     const parcelCollection = db.collection('parcels');
-    const userCollection=db.collection('users')
+    const userCollection = db.collection('users')
+    const ridersCollection = db.collection('riders'
+    );
 
     // ✅ Root route
     app.get('/', (req, res) => {
@@ -67,6 +69,13 @@ async function run() {
       return res.send({ inserted: true, id: result.insertedId });
     });
     
+
+    app.post('/riders',async(req, res) =>{
+
+      const rider = req.body;
+      const result = await ridersCollection.insertOne(rider);
+      res.send(result)
+    })
 
 // ✅ Check if user exists by email
 app.get('/users/:email', async (req, res) => {
